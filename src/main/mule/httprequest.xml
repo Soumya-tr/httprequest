@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="7dc05239-1c47-433e-84d9-eb6bc2eb684f" >
+		<http:request-connection protocol="HTTPS" host="ample.vie.auroramj.com" port="3001">
+		</http:request-connection>
+	</http:request-config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="cbaef26b-951a-4e45-9d5a-c051ff426199" />
+	<flow name="httprequestFlow" doc:id="d6655b7d-84e2-4eb5-adc2-d3c473da3b04" >
+		<scheduler doc:name="Scheduler" doc:id="84b87e1b-c42e-4946-938a-38d18f764699" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="5" timeUnit="HOURS"/>
+			</scheduling-strategy>
+		</scheduler>
+		<flow-ref doc:name="Get token" doc:id="77e1e1a2-fafa-4290-a181-ca5ea0f7ec75" name="GetToken"/>
+		<logger level="INFO" doc:name="Logger" doc:id="a7ba9e6f-cb77-4f68-982b-1e2e45c53bc7" message="#['token: ' ++ vars.token]" />
+		<http:request method="GET" doc:name="Request" doc:id="28456e54-659b-4613-83aa-3d4b98f8c3a7" config-ref="HTTP_Request_configuration" path="/v1/products">
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"token" : vars.token
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="set productSKUIDList" doc:id="3e1995a1-3bef-4254-96c1-9ce763cf03a3" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="productSKUIDList" ><![CDATA[%dw 2.0
+output application/java
+---
+(flatten(payload[1].skus)).*id filter $ != null]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="e5b8c56b-1ccf-4371-b063-8801e8698286" message="#[vars.productSKUIDList joinBy ',']" />
+		<set-variable doc:name="Set Response" doc:id="59ae6daa-2785-465c-b3a8-d9b0f175c83d" variableName="bottleIdList" value="#[[]]" />
+		<foreach doc:name="For Each SKU" doc:id="58be0555-5ce4-4784-9364-a400817999bf" collection="#[vars.productSKUIDList]" counterVariableName="skuId">
+			<set-variable value="#[payload]" doc:name="skuID" doc:id="3ee497a6-75a3-4c65-8382-1a7fa16f80ad" variableName="skuID"/>
+			<http:request method="GET" doc:name="Request for Package Runs" doc:id="9eb02e08-ca27-4579-978f-10d6206186de" config-ref="HTTP_Request_configuration" path="/v1/skus/{id}/packaging_runs">
+				<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"id" : vars.skuID
+}]]]></http:uri-params>
+				<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"token" : vars.token
+}]]]></http:query-params>
+			</http:request>
+			<choice doc:name="Choice" doc:id="7548eb03-0dc2-4f9d-b98a-9fa080549404" >
+				<when expression="#[sizeOf(payload[1]) &gt; 0]">
+					<set-variable value="#[output application/json
+
+---
+
+   payload[1].*id filter $ != null]" doc:name="Set packageRunIdList" doc:id="b5b60fc0-eda5-4ceb-a509-3296a11dfbe7" variableName="packageRunIdList" />
+					<logger level="INFO" doc:name="Logger" doc:id="0bb27d03-487d-491e-b700-4148a6114709" message="#[vars.packageRunIdList joinBy ',']" />
+					<foreach doc:name="For Each" doc:id="70b017f7-f43e-4673-bc47-58094642cbb8" collection="#[vars.packageRunIdList]">
+						<logger level="INFO" doc:name="Logger" doc:id="ade26f4e-d203-44c7-9249-1ddc53b49ec5" message="#[payload]" />
+						<http:request method="GET" doc:name="Request for Bottled Ids" doc:id="08cdcf1a-1fad-476b-93fb-9b45b69e29af" config-ref="HTTP_Request_configuration" path="v1/packaging_runs/{id}">
+					<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"id" : payload as String
+}]]]></http:uri-params>
+					<http:query-params><![CDATA[#[output application/java
+---
+{
+	"token" : vars.token
+}]]]></http:query-params>
+				</http:request>
+						<ee:transform doc:name="Transform Message" doc:id="3378d8a7-168b-4847-8447-b26366bbe1e1">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+								<ee:set-variable variableName="bottleIdList"><![CDATA[%dw 2.0
+output application/dw
+
+---
+
+	vars.bottleIdList ++
+[
+	{
+	"sku": payload.sku_id ,
+	"package-run": payload.id ,
+	"lot-id": payload.bulk_lot_id ,
+	"lot-name": payload.bulk_lot_name,
+	"bottle-ids": payload.bottles.*id filter $ != null
+	}
+	
+]
+]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+				<file:write doc:name="Write Response" doc:id="da9d2e6b-7a16-4f6d-bc0c-3395783f8d1d" path="/Users/soumya/AnypointStudio/studio-workspace/httprequest/src/test/resources/Response.txt" config-ref="File_Config">
+							<file:content><![CDATA[#[vars.bottleIdList]]]></file:content>
+						</file:write>
+			</foreach>
+					<flow-ref doc:name="Reset token" doc:id="8ada78a4-b4e8-46bd-9a44-69d01ab05642" name="GetToken" />
+					<logger level="INFO" doc:name="Logger" doc:id="a2175b07-505d-421e-a003-2c14b45e8744" message="#['Reseting token to:' ++ vars.token]" />
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="no packaging runs for sku" doc:id="4c557f22-3de3-4f7e-aeb7-b2becb4fd9e9" message="#['There are no packaging runs for skuID:' ++ vars.skuID]"/>
+				</otherwise>
+			</choice>
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="4726d6c7-e642-47a4-9c87-a5d9d010e83e" message="*** END***" />
+	</flow>
+	<flow name="GetToken" doc:id="a529a051-0555-4492-bf00-0432592b1d79" maxConcurrency="1" tracking:enable-default-events="true">
+		<http:request method="POST" doc:name="Request" doc:id="b29f9386-0e32-4989-8c79-eaf45a553b20" config-ref="HTTP_Request_configuration" path="/v1/users/login">
+			<http:body><![CDATA[#[output application/json
+---
+{
+	"username":"patientlove_test",
+    "password":"5pRC\$Wlb&dcZw4ym"
+}]]]></http:body>
+		</http:request>
+		<set-variable value="#[payload.token]" doc:name="Set token Variable" doc:id="d0b13638-30a5-4155-b85e-dfcb78535b6f" variableName="token" />
+	</flow>
+</mule>
