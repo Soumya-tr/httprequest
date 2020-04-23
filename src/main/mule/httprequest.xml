@@ -20,7 +20,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 				<fixed-frequency frequency="5" timeUnit="HOURS"/>
 			</scheduling-strategy>
 		</scheduler>
-		<flow-ref doc:name="Get token" doc:id="77e1e1a2-fafa-4290-a181-ca5ea0f7ec75" name="GetToken"/>
+		<flow-ref doc:name="Gettoken" doc:id="77e1e1a2-fafa-4290-a181-ca5ea0f7ec75" name="GetToken"/>
 		<logger level="INFO" doc:name="Logger" doc:id="a7ba9e6f-cb77-4f68-982b-1e2e45c53bc7" message="#['token: ' ++ vars.token]" />
 		<http:request method="GET" doc:name="Request" doc:id="28456e54-659b-4613-83aa-3d4b98f8c3a7" config-ref="HTTP_Request_configuration" path="/v1/products">
 			<http:query-params ><![CDATA[#[output application/java
